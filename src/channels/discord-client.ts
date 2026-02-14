@@ -7,6 +7,7 @@
  * Slash commands:
  *   /status     — Instant status (no Claude)
  *   /help       — Show available commands (no Claude)
+ *   /reset      — Reset conversation (no Claude)
  *   /regime     — Fresh regime analysis → regime-analyst
  *   /performance — Trade review → trade-reviewer
  *   /strategies — List strategies → strategist
@@ -171,11 +172,14 @@ const slashCommands = [
                 .setRequired(true)),
     new SlashCommandBuilder()
         .setName('ask')
-        .setDescription('Ask the strategist anything about BTC/ETH trading')
+        .setDescription('Ask the strategist anything about trading')
         .addStringOption(option =>
             option.setName('question')
                 .setDescription('Your question')
                 .setRequired(true)),
+    new SlashCommandBuilder()
+        .setName('reset')
+        .setDescription('Reset conversation — next message starts fresh'),
 ];
 
 // ============================================================
@@ -495,6 +499,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
                     await command.editReply((e as Error).message);
                 }
                 cleanOldPending();
+                return;
+            }
+
+            case 'reset': {
+                fs.writeFileSync(path.join(TINYCLAW_HOME, 'reset_flag'), 'reset');
+                await command.reply({ content: 'Conversation reset! Next message will start a fresh conversation.', ephemeral: true });
                 return;
             }
 

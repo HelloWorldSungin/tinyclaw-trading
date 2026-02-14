@@ -1,0 +1,1 @@
+Review recent trade performance. Query strategist.positions for trades since last review. Calculate updated metrics (win rate, P&L, Sharpe). Extract any lessons learned. Update state/performance-log.json. Highlight any notable patterns or concerns.

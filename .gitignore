@@ -19,8 +19,9 @@ dist/
 state/
 !state/.gitkeep
 
-# Workspace directories (created at runtime per-agent)
-workspace/
+# Workspace runtime artifacts (Claude Code creates these)
+workspace/**/CLAUDE.local.md
+workspace/**/.claude/settings.local.json
 
 *.log
 

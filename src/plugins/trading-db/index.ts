@@ -12,6 +12,8 @@ export {
   activateStrategy,
   logCronRun,
   getLastCronSuccess,
+  logRegime,
+  getLatestRegime,
   closePool,
 } from "./db";
 

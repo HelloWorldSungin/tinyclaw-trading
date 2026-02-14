@@ -15,6 +15,7 @@ import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
+import { getLatestRegime } from '../plugins/trading-db/db';
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
 const __filename_ = fileURLToPath(import.meta.url);
@@ -397,22 +398,23 @@ const PROJECT_ROOT = path.join(TINYCLAW_HOME, '..');
 const STATE_DIR = path.join(PROJECT_ROOT, 'state');
 const HEARTBEAT_STATE_DIR = path.join(TINYCLAW_HOME, 'heartbeat-state');
 
-function loadTradingState(): TradingState {
+async function loadTradingState(): Promise<TradingState> {
     const state: TradingState = { regime: null, strategies: [], performance: null, dbConnected: null };
 
     try {
-        const raw = fs.readFileSync(path.join(STATE_DIR, 'market-regime.json'), 'utf8');
-        const data = JSON.parse(raw);
-        state.regime = {
-            regime: data.regime || 'NEUTRAL',
-            btcPrice: data.btc_price || 0,
-            btc24h: data.btc_24h_change || 0,
-            ethPrice: data.eth_price || 0,
-            eth24h: data.eth_24h_change || 0,
-            confidence: data.confidence || 0,
-            assessedAt: data.assessed_at || '',
-        };
-    } catch { /* no regime file */ }
+        const data = await getLatestRegime();
+        if (data) {
+            state.regime = {
+                regime: data.regime || 'NEUTRAL',
+                btcPrice: data.btc_price || 0,
+                btc24h: data.btc_24h_change || 0,
+                ethPrice: data.eth_price || 0,
+                eth24h: data.eth_24h_change || 0,
+                confidence: data.confidence || 0,
+                assessedAt: data.assessed_at || '',
+            };
+        }
+    } catch { /* DB read failed */ }
 
     try {
         const raw = fs.readFileSync(path.join(STATE_DIR, 'active-strategies.json'), 'utf8');
@@ -476,7 +478,12 @@ function App({ filterTeamId }: { filterTeamId: string | null }) {
     const [processorAlive, setProcessorAlive] = useState(false);
     const [startTime] = useState(Date.now());
     const [, setTick] = useState(0);
-    const [tradingState, setTradingState] = useState<TradingState>(() => loadTradingState());
+    const [tradingState, setTradingState] = useState<TradingState>({ regime: null, strategies: [], performance: null, dbConnected: null });
+
+    // Load initial trading state from DB
+    useEffect(() => {
+        loadTradingState().then(setTradingState);
+    }, []);
 
     // Force re-render every second for animated dots and uptime
     useEffect(() => {
@@ -526,10 +533,10 @@ function App({ filterTeamId }: { filterTeamId: string | null }) {
         setAgentStates(states);
     }, [settings, filterTeamId]);
 
-    // Poll trading state files + heartbeat state every 10s
+    // Poll trading state + heartbeat state every 10s
     useEffect(() => {
         const interval = setInterval(() => {
-            setTradingState(loadTradingState());
+            loadTradingState().then(setTradingState);
             // Update heartbeat timestamps on existing agent states
             setAgentStates(prev => {
                 const updated = { ...prev };

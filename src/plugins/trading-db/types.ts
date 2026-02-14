@@ -123,6 +123,7 @@ export interface DbRegimeLog {
   trading_bias: string | null;
   confidence: number | null;
   reasoning: string | null;
+  ticker_data: Record<string, { price: number; change_24h: number }> | null;
   created_at: string;
 }
 

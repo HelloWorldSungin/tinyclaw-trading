@@ -212,6 +212,79 @@ export async function getLastCronSuccess(
 }
 
 /**
+ * Log a regime assessment to strategist.regime_log.
+ */
+export async function logRegime(params: {
+  btc_price: number | null;
+  btc_24h_change: number | null;
+  eth_price: number | null;
+  eth_24h_change: number | null;
+  regime: string;
+  trading_bias: string | null;
+  confidence: number | null;
+  reasoning: string | null;
+  ticker_data?: Record<string, { price: number; change_24h: number }> | null;
+}): Promise<void> {
+  await pool.query(
+    `INSERT INTO strategist.regime_log
+     (assessed_at, btc_price, btc_24h_change, eth_price, eth_24h_change, regime, trading_bias, confidence, reasoning, ticker_data)
+     VALUES (NOW(), $1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [
+      params.btc_price,
+      params.btc_24h_change,
+      params.eth_price,
+      params.eth_24h_change,
+      params.regime,
+      params.trading_bias,
+      params.confidence,
+      params.reasoning?.substring(0, 2000) ?? null,
+      params.ticker_data ? JSON.stringify(params.ticker_data) : null,
+    ]
+  );
+}
+
+/**
+ * Fetch the most recent regime assessment from strategist.regime_log.
+ */
+export async function getLatestRegime(): Promise<{
+  regime: string;
+  btc_price: number | null;
+  btc_24h_change: number | null;
+  eth_price: number | null;
+  eth_24h_change: number | null;
+  trading_bias: string | null;
+  confidence: number | null;
+  reasoning: string | null;
+  assessed_at: string;
+  ticker_data: Record<string, { price: number; change_24h: number }> | null;
+} | null> {
+  try {
+    const result = await pool.query(
+      `SELECT regime, btc_price, btc_24h_change, eth_price, eth_24h_change,
+              trading_bias, confidence, reasoning, assessed_at, ticker_data
+       FROM strategist.regime_log ORDER BY assessed_at DESC LIMIT 1`
+    );
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0];
+    return {
+      regime: row.regime,
+      btc_price: row.btc_price,
+      btc_24h_change: row.btc_24h_change,
+      eth_price: row.eth_price,
+      eth_24h_change: row.eth_24h_change,
+      trading_bias: row.trading_bias,
+      confidence: row.confidence != null ? parseFloat(row.confidence) : null,
+      reasoning: row.reasoning,
+      assessed_at: row.assessed_at?.toISOString?.() ?? String(row.assessed_at),
+      ticker_data: row.ticker_data ?? null,
+    };
+  } catch (err) {
+    console.error("[db] Failed to get latest regime:", err);
+    return null;
+  }
+}
+
+/**
  * Gracefully close the connection pool. Call on process exit.
  */
 export async function closePool(): Promise<void> {

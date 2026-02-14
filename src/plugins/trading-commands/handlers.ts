@@ -18,10 +18,10 @@ import {
   getStrategy,
   activateStrategy,
   logConversation,
+  getLatestRegime,
 } from "../trading-db/db";
 import { buildPrompt, buildResearchPrompt } from "../trading-prompts/prompt-builder";
 import type {
-  MarketRegimeState,
   ActiveStrategiesState,
   PerformanceLogState,
 } from "../trading-db/types";
@@ -94,7 +94,7 @@ export function checkRateLimit(): boolean {
  * /status — Quick state summary. Reads state files directly, no Claude spawn.
  */
 export async function handleStatusCommand(): Promise<string> {
-  const regime = await readState<MarketRegimeState>("market-regime.json");
+  const regime = await getLatestRegime();
   const strategies =
     await readState<ActiveStrategiesState>("active-strategies.json");
   const perf = await readState<PerformanceLogState>("performance-log.json");
@@ -105,12 +105,17 @@ export async function handleStatusCommand(): Promise<string> {
     const age = Math.round(
       (Date.now() - new Date(regime.assessed_at).getTime()) / 60000
     );
-    sections.push(
+    let regimeText =
       `**Market Regime:** ${regime.regime}` +
-        `\nBTC: \`$${regime.btc_price?.toLocaleString()}\` (${regime.btc_24h_change >= 0 ? "+" : ""}${regime.btc_24h_change?.toFixed(2)}%)` +
-        `\nETH: \`$${regime.eth_price?.toLocaleString()}\` (${regime.eth_24h_change >= 0 ? "+" : ""}${regime.eth_24h_change?.toFixed(2)}%)` +
-        `\nUpdated: ${age}m ago\n`
-    );
+        `\nBTC: \`$${regime.btc_price?.toLocaleString()}\` (${(regime.btc_24h_change ?? 0) >= 0 ? "+" : ""}${regime.btc_24h_change?.toFixed(2)}%)` +
+        `\nETH: \`$${regime.eth_price?.toLocaleString()}\` (${(regime.eth_24h_change ?? 0) >= 0 ? "+" : ""}${regime.eth_24h_change?.toFixed(2)}%)`;
+    if (regime.ticker_data) {
+      for (const [ticker, data] of Object.entries(regime.ticker_data)) {
+        regimeText += `\n${ticker.replace("-USD", "")}: \`$${data.price?.toLocaleString()}\` (${data.change_24h >= 0 ? "+" : ""}${data.change_24h?.toFixed(2)}%)`;
+      }
+    }
+    regimeText += `\nUpdated: ${age}m ago\n`;
+    sections.push(regimeText);
   } else {
     sections.push("**Market Regime:** Not yet assessed\n");
   }
@@ -158,8 +163,11 @@ export async function handleHelpCommand(): Promise<string> {
     `/activate — Activate strategy for paper trading\n` +
     `/research — Research & backtest on CT110\n` +
     `/ask — Ask Claude anything\n` +
+    `/reset — Reset conversation (fresh start)\n` +
     `/help — This message\n\n` +
-    `Or just send a message in the channel to chat about BTC/ETH trading.`
+    `**Active tickers:** ETH, SOL, XRP, BNB, DOGE\n` +
+    `**Model:** ArkSignal-Strategy-v1 | **Strategy:** D_fixed_exit (long_only)\n\n` +
+    `Or just send a message in the channel to chat about trading.`
   );
 }
 
@@ -178,14 +186,16 @@ export async function buildRegimePrompt(): Promise<string> {
     command: "/regime",
   });
 
-  const stateDir = getStateDir();
   return buildPrompt(
-    "Fetch current BTC and ETH prices from the OHLCV service (localhost:8812, tickers BTC-USD and ETH-USD). " +
+    "Fetch current prices for ALL tickers from the OHLCV service (localhost:8812): BTC-USD, ETH-USD, SOL-USD, XRP-USD, BNB-USD, DOGE-USD. " +
       "Calculate 24h change percentages. Determine regime (RALLY if BTC >+3%, SELLOFF if <-3%, NEUTRAL otherwise). " +
-      "Assess trading bias for BTC and ETH. " +
-      `Write results as JSON to ${stateDir}/market-regime.json with fields: regime, btc_price, btc_24h_change, eth_price, eth_24h_change, trading_bias, confidence (0.0-1.0 range), reasoning, assessed_at. ` +
-      "Also INSERT into strategist.regime_log table (confidence as 0.0-1.0 decimal, not percentage). " +
-      "Then give a 2-3 sentence trading assessment."
+      "Assess trading bias for all active tickers (ETH, SOL, XRP, BNB, DOGE) based on BTC regime. " +
+      "INSERT into strategist.regime_log with exact columns: " +
+      "(assessed_at, btc_price, btc_24h_change, eth_price, eth_24h_change, regime, trading_bias, confidence, reasoning, ticker_data). " +
+      "Use NOW() for assessed_at. Confidence as 0.0-1.0 decimal, not percentage. " +
+      'Store SOL/XRP/BNB/DOGE prices in ticker_data as JSONB: \'{"SOL-USD": {"price": N, "change_24h": N}, ...}\'::jsonb. ' +
+      "Do NOT alter or recreate the table. " +
+      "Then give a 2-3 sentence trading assessment covering all active tickers."
   );
 }
 
