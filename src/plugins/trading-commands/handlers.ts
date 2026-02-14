@@ -13,7 +13,7 @@
  * - Fail-closed patterns
  */
 
-import { readState } from "../trading-db/state";
+import { readState, getStateDir } from "../trading-db/state";
 import {
   getStrategy,
   activateStrategy,
@@ -178,11 +178,12 @@ export async function buildRegimePrompt(): Promise<string> {
     command: "/regime",
   });
 
+  const stateDir = getStateDir();
   return buildPrompt(
     "Fetch current BTC and ETH prices from the OHLCV service (localhost:8812, tickers BTC-USD and ETH-USD). " +
       "Calculate 24h change percentages. Determine regime (RALLY if BTC >+3%, SELLOFF if <-3%, NEUTRAL otherwise). " +
       "Assess trading bias for BTC and ETH. " +
-      "Write results as JSON to strategist/state/market-regime.json with fields: regime, btc_price, btc_24h_change, eth_price, eth_24h_change, trading_bias, confidence (0.0-1.0 range), reasoning, assessed_at. " +
+      `Write results as JSON to ${stateDir}/market-regime.json with fields: regime, btc_price, btc_24h_change, eth_price, eth_24h_change, trading_bias, confidence (0.0-1.0 range), reasoning, assessed_at. ` +
       "Also INSERT into strategist.regime_log table (confidence as 0.0-1.0 decimal, not percentage). " +
       "Then give a 2-3 sentence trading assessment."
   );
@@ -198,9 +199,10 @@ export async function buildPerformancePrompt(): Promise<string> {
     command: "/performance",
   });
 
+  const stateDir = getStateDir();
   return buildPrompt(
     "Query strategist.positions for all recent trades. Calculate win rate, total P&L, and identify best/worst trades. " +
-      "Write summary to strategist/state/performance-log.json. " +
+      `Write summary to ${stateDir}/performance-log.json. ` +
       "Give a concise performance report with key insights."
   );
 }
@@ -291,9 +293,10 @@ export async function buildActivatePrompt(
   // Activate directly via parameterized query — never pass SQL to Claude
   await activateStrategy(strategyId);
 
+  const stateDir = getStateDir();
   const prompt = await buildPrompt(
     `Strategy '${strategyId}' has been activated for paper trading.${qualityWarning} ` +
-      `Refresh strategist/state/active-strategies.json with all active strategies from the DB. ` +
+      `Refresh ${stateDir}/active-strategies.json with all active strategies from the DB. ` +
       `Confirm activation with the strategy details.`
   );
 
