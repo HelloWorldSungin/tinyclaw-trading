@@ -1,13 +1,27 @@
 # Dependencies
 node_modules/
+bun.lockb
 
 # TypeScript build output
 dist/
 
-# TinyClaw runtime files
-.tinyclaw
+# TinyClaw runtime files (queue, logs, events are ephemeral)
+.tinyclaw/queue/
+.tinyclaw/logs/
+.tinyclaw/events/
+.tinyclaw/chats/
+.tinyclaw/files/
+.tinyclaw/reset_flag
+.tinyclaw/pairing.json
+.tinyclaw/heartbeat-state/
 
-.wwebjs_cache
+# State files (local cache, DB is source of truth)
+state/
+!state/.gitkeep
+
+# Workspace directories (created at runtime per-agent)
+workspace/
+
 *.log
 
 # Environment variables

@@ -3,6 +3,12 @@ export interface AgentConfig {
     provider: string;       // 'anthropic' or 'openai'
     model: string;           // e.g. 'sonnet', 'opus', 'gpt-5.3-codex'
     working_directory: string;
+    invoke_mode?: 'local' | 'remote';   // default: 'local'
+    remote_host?: string;               // SSH host for remote invocation
+    remote_user?: string;               // SSH user for remote invocation
+    remote_project_root?: string;       // project root on remote host
+    heartbeat_interval?: number;        // per-agent interval in seconds (overrides global)
+    heartbeat_mode?: 'claude' | 'script'; // 'script' = no Claude spawn, run heartbeat.sh instead
 }
 
 export interface TeamConfig {
@@ -23,9 +29,12 @@ export interface Settings {
     };
     channels?: {
         enabled?: string[];
-        discord?: { bot_token?: string };
-        telegram?: { bot_token?: string };
-        whatsapp?: {};
+        discord?: {
+            bot_token?: string;
+            user_id?: string;       // authorized Discord user ID (fail-closed auth)
+            channel_id?: string;    // server channel for plain text messages
+            webhook_url?: string;   // webhook for heartbeat/cron notifications
+        };
     };
     models?: {
         provider?: string; // 'anthropic' or 'openai'
@@ -51,6 +60,7 @@ export interface MessageData {
     timestamp: number;
     messageId: string;
     agent?: string; // optional: pre-routed agent id from channel client
+    command?: string; // slash command name if from a slash command
     files?: string[];
 }
 

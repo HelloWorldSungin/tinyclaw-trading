@@ -1,0 +1,61 @@
+{
+  "workspace": {
+    "path": "workspace",
+    "name": "TinyClaw Trading"
+  },
+  "channels": {
+    "enabled": ["discord"],
+    "discord": {}
+  },
+  "models": {
+    "provider": "anthropic",
+    "anthropic": {
+      "model": "sonnet"
+    }
+  },
+  "agents": {
+    "strategist": {
+      "name": "Strategist",
+      "provider": "anthropic",
+      "model": "opus"
+    },
+    "regime-analyst": {
+      "name": "Regime Analyst",
+      "provider": "anthropic",
+      "model": "sonnet",
+      "heartbeat_interval": 7200
+    },
+    "trade-reviewer": {
+      "name": "Trade Reviewer",
+      "provider": "anthropic",
+      "model": "sonnet",
+      "heartbeat_interval": 21600
+    },
+    "researcher": {
+      "name": "Researcher",
+      "provider": "anthropic",
+      "model": "opus",
+      "invoke_mode": "remote",
+      "remote_host": "192.168.68.110",
+      "remote_user": "researcher",
+      "remote_project_root": "/opt/ArkNode-AI/projects/trading-signal-ai"
+    },
+    "watchdog": {
+      "name": "Watchdog",
+      "provider": "anthropic",
+      "model": "sonnet",
+      "heartbeat_interval": 3600,
+      "heartbeat_mode": "script"
+    }
+  },
+  "teams": {
+    "trading": {
+      "name": "Trading Team",
+      "agents": ["strategist", "regime-analyst", "trade-reviewer", "researcher", "watchdog"],
+      "leader_agent": "strategist"
+    }
+  },
+  "monitoring": {
+    "heartbeat_interval": 3600
+  }
+}

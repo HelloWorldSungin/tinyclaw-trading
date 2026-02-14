@@ -1,0 +1,26 @@
+[Unit]
+Description=TinyClaw Trading — Heartbeat Cron
+After=network.target tinyclaw-trading.service
+Requires=tinyclaw-trading.service
+
+[Service]
+Type=simple
+User=strategist
+Group=strategist
+WorkingDirectory=/opt/ArkNode-AI/projects/trading-signal-ai/tinyclaw-trading
+EnvironmentFile=/opt/ArkNode-AI/projects/trading-signal-ai/tinyclaw-trading/.env
+Environment=HOME=/home/strategist
+Environment=PATH=/home/strategist/.bun/bin:/home/strategist/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+ExecStart=/usr/bin/bash lib/heartbeat-cron.sh
+
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tinyclaw-heartbeat
+
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

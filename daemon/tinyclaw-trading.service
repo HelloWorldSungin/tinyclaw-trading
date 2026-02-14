@@ -1,0 +1,31 @@
+[Unit]
+Description=TinyClaw Trading — Multi-Agent Trading Team
+After=network.target postgresql.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=strategist
+Group=strategist
+WorkingDirectory=/opt/ArkNode-AI/projects/trading-signal-ai/tinyclaw-trading
+EnvironmentFile=/opt/ArkNode-AI/projects/trading-signal-ai/tinyclaw-trading/.env
+Environment=HOME=/home/strategist
+Environment=PATH=/home/strategist/.bun/bin:/home/strategist/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+# Queue processor (main daemon)
+ExecStart=/home/strategist/.bun/bin/bun run src/queue-processor.ts
+
+# Discord client runs as a separate service (see tinyclaw-discord.service)
+# Heartbeat cron runs as a separate service (see tinyclaw-heartbeat.service)
+
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tinyclaw-trading
+
+# Security hardening
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

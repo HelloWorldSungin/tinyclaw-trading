@@ -1,6 +1,6 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 /**
- * Queue Processor - Handles messages from all channels (WhatsApp, Telegram, etc.)
+ * Queue Processor - Handles messages from Discord channel.
  * Processes one message at a time to avoid race conditions
  *
  * Supports multi-agent routing:
@@ -12,6 +12,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { MessageData, ResponseData, QueueFile, ChainStep, TeamConfig } from './lib/types';
 import {
     QUEUE_INCOMING, QUEUE_OUTGOING, QUEUE_PROCESSING,
@@ -21,6 +22,7 @@ import {
 import { log, emitEvent } from './lib/logging';
 import { parseAgentRouting, findTeamForAgent, getAgentResetFlag, extractTeammateMentions } from './lib/routing';
 import { invokeAgent } from './lib/invoke';
+import { logConversation } from './plugins/trading-db/db';
 
 // Ensure directories exist
 [QUEUE_INCOMING, QUEUE_OUTGOING, QUEUE_PROCESSING, path.dirname(LOG_FILE)].forEach(dir => {
@@ -65,7 +67,7 @@ async function processMessage(messageFile: string): Promise<void> {
         const teams = getTeams(settings);
 
         // Get workspace path from settings
-        const workspacePath = settings?.workspace?.path || path.join(require('os').homedir(), 'tinyclaw-workspace');
+        const workspacePath = settings?.workspace?.path || path.join(os.homedir(), 'tinyclaw-workspace');
 
         // Route message to agent (or team)
         let agentId: string;
@@ -152,8 +154,16 @@ async function processMessage(messageFile: string): Promise<void> {
 
         if (!teamContext) {
             // No team context — single agent invocation (backward compatible)
+            const startTime = Date.now();
             try {
                 finalResponse = await invokeAgent(agent, agentId, message, workspacePath, shouldReset, agents, teams);
+                // Log assistant response to DB for prompt-builder context
+                logConversation({
+                    role: 'assistant',
+                    content: finalResponse,
+                    command: agentId,
+                    duration_ms: Date.now() - startTime,
+                }).catch(() => {}); // fire-and-forget, don't block queue
             } catch (error) {
                 const provider = agent.provider || 'anthropic';
                 log('ERROR', `${provider === 'openai' ? 'Codex' : 'Claude'} error (agent: ${agentId}): ${(error as Error).message}`);
@@ -190,8 +200,15 @@ async function processMessage(messageFile: string): Promise<void> {
                 }
 
                 let stepResponse: string;
+                const stepStartTime = Date.now();
                 try {
                     stepResponse = await invokeAgent(currentAgent, currentAgentId, currentMessage, workspacePath, currentShouldReset, agents, teams);
+                    logConversation({
+                        role: 'assistant',
+                        content: stepResponse,
+                        command: currentAgentId,
+                        duration_ms: Date.now() - stepStartTime,
+                    }).catch(() => {});
                 } catch (error) {
                     const provider = currentAgent.provider || 'anthropic';
                     log('ERROR', `${provider === 'openai' ? 'Codex' : 'Claude'} error (agent: ${currentAgentId}): ${(error as Error).message}`);
@@ -249,9 +266,16 @@ async function processMessage(messageFile: string): Promise<void> {
                             emitEvent('chain_step_start', { teamId: teamContext!.teamId, step: chainSteps.length + 1, agentId: mention.teammateId, agentName: mAgent.name });
 
                             let mResponse: string;
+                            const mStartTime = Date.now();
                             try {
                                 const mMessage = `[Message from teammate @${currentAgentId}]:\n${mention.message}`;
                                 mResponse = await invokeAgent(mAgent, mention.teammateId, mMessage, workspacePath, mShouldReset, agents, teams);
+                                logConversation({
+                                    role: 'assistant',
+                                    content: mResponse,
+                                    command: mention.teammateId,
+                                    duration_ms: Date.now() - mStartTime,
+                                }).catch(() => {});
                             } catch (error) {
                                 log('ERROR', `Fan-out error (agent: ${mention.teammateId}): ${(error as Error).message}`);
                                 mResponse = "Sorry, I encountered an error processing this request.";

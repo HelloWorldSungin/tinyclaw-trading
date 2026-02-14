@@ -57,6 +57,15 @@ interface AgentState {
     status: AgentStatus;
     lastActivity: string;
     responseLength?: number;
+    lastHeartbeat?: number; // epoch seconds from heartbeat-state/
+    heartbeatInterval?: number; // seconds from settings
+}
+
+interface TradingState {
+    regime: { regime: string; btcPrice: number; btc24h: number; ethPrice: number; eth24h: number; confidence: number; assessedAt: string } | null;
+    strategies: { id: string; name: string; asset: string; direction: string; status: string }[];
+    performance: { totalTrades: number; openPositions: number; winRate: number | null; pnl: number | null; reviewedAt: string } | null;
+    dbConnected: boolean | null;
 }
 
 interface ChainArrow {
@@ -177,6 +186,7 @@ function AgentCard({ agent, isLeader }: { agent: AgentState; isLeader: boolean }
                     <Text color="gray">{agent.lastActivity || 'Idle'}</Text>
                 )}
             </Box>
+            <HeartbeatBar agent={agent} />
         </Box>
     );
 }
@@ -248,6 +258,211 @@ function StatusBar({ queueDepth, totalProcessed, processorAlive }: { queueDepth:
     );
 }
 
+// ─── Trading-Specific Components ────────────────────────────────────────────
+
+const REGIME_COLOR: Record<string, string> = {
+    RALLY: 'green',
+    SELLOFF: 'red',
+    NEUTRAL: 'yellow',
+};
+
+function TradingPanel({ trading }: { trading: TradingState }) {
+    const sep = '\u2502';
+    return (
+        <Box flexDirection="column" marginY={1}>
+            <Text bold color="white">{'\u2636'} Trading Status</Text>
+            <Text color="gray">{'\u2500'.repeat(72)}</Text>
+
+            {/* Regime row */}
+            <Box gap={2}>
+                <Text color="gray">Regime:</Text>
+                {trading.regime ? (
+                    <>
+                        <Text color={REGIME_COLOR[trading.regime.regime] || 'white'} bold>
+                            {trading.regime.regime}
+                        </Text>
+                        <Text color="gray">{sep}</Text>
+                        <Text color="white">BTC ${trading.regime.btcPrice.toLocaleString()}</Text>
+                        <Text color={trading.regime.btc24h >= 0 ? 'green' : 'red'}>
+                            {' '}{trading.regime.btc24h >= 0 ? '+' : ''}{trading.regime.btc24h.toFixed(1)}%
+                        </Text>
+                        <Text color="gray">{sep}</Text>
+                        <Text color="white">ETH ${trading.regime.ethPrice.toLocaleString()}</Text>
+                        <Text color={trading.regime.eth24h >= 0 ? 'green' : 'red'}>
+                            {' '}{trading.regime.eth24h >= 0 ? '+' : ''}{trading.regime.eth24h.toFixed(1)}%
+                        </Text>
+                        <Text color="gray">{sep}</Text>
+                        <Text dimColor>{timeAgo(new Date(trading.regime.assessedAt).getTime())}</Text>
+                    </>
+                ) : (
+                    <Text color="gray" italic>No assessment yet</Text>
+                )}
+            </Box>
+
+            {/* Strategies row */}
+            <Box gap={2}>
+                <Text color="gray">Strategies:</Text>
+                {trading.strategies.length === 0 ? (
+                    <Text color="gray" italic>None active</Text>
+                ) : (
+                    trading.strategies.map((s, i) => (
+                        <Box key={i}>
+                            <Text color="cyan">{s.name}</Text>
+                            <Text color="gray"> ({s.asset}/{s.direction})</Text>
+                            <Text color={s.status === 'live' ? 'green' : s.status === 'paper' ? 'yellow' : 'gray'}>
+                                {' '}{s.status}
+                            </Text>
+                            {i < trading.strategies.length - 1 && <Text color="gray">{' ' + sep + ' '}</Text>}
+                        </Box>
+                    ))
+                )}
+            </Box>
+
+            {/* Performance row */}
+            <Box gap={2}>
+                <Text color="gray">Performance:</Text>
+                {trading.performance ? (
+                    <>
+                        <Text color="white">{trading.performance.totalTrades} trades</Text>
+                        <Text color="gray">{sep}</Text>
+                        <Text color="yellow">{trading.performance.openPositions} open</Text>
+                        <Text color="gray">{sep}</Text>
+                        <Text color="white">
+                            WR: <Text color={trading.performance.winRate !== null && trading.performance.winRate >= 50 ? 'green' : 'red'}>
+                                {trading.performance.winRate !== null ? `${trading.performance.winRate.toFixed(1)}%` : 'N/A'}
+                            </Text>
+                        </Text>
+                        <Text color="gray">{sep}</Text>
+                        <Text color="white">
+                            P&L: <Text color={trading.performance.pnl !== null && trading.performance.pnl >= 0 ? 'green' : 'red'}>
+                                {trading.performance.pnl !== null ? `${trading.performance.pnl >= 0 ? '+' : ''}${trading.performance.pnl.toFixed(2)}%` : 'N/A'}
+                            </Text>
+                        </Text>
+                        <Text color="gray">{sep}</Text>
+                        <Text dimColor>{timeAgo(new Date(trading.performance.reviewedAt).getTime())}</Text>
+                    </>
+                ) : (
+                    <Text color="gray" italic>No review yet</Text>
+                )}
+            </Box>
+
+            {/* DB status row */}
+            <Box gap={2}>
+                <Text color="gray">Database:</Text>
+                {trading.dbConnected === null ? (
+                    <Text color="gray" italic>Checking...</Text>
+                ) : trading.dbConnected ? (
+                    <Text color="green">{'\u25CF'} Connected (CT120:5433)</Text>
+                ) : (
+                    <Text color="red">{'\u25CB'} Disconnected</Text>
+                )}
+            </Box>
+        </Box>
+    );
+}
+
+function HeartbeatBar({ agent }: { agent: AgentState }) {
+    if (!agent.heartbeatInterval) return null;
+
+    const now = Math.floor(Date.now() / 1000);
+    const elapsed = agent.lastHeartbeat ? now - agent.lastHeartbeat : null;
+    const remaining = elapsed !== null ? Math.max(0, agent.heartbeatInterval - elapsed) : null;
+    const pct = elapsed !== null ? Math.min(1, elapsed / agent.heartbeatInterval) : 0;
+
+    // 10-char progress bar
+    const filled = Math.round(pct * 10);
+    const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(10 - filled);
+    const barColor = pct >= 0.9 ? 'yellow' : pct >= 1 ? 'red' : 'gray';
+
+    return (
+        <Box>
+            <Text dimColor>{'\u2661'} </Text>
+            <Text color={barColor}>{bar}</Text>
+            <Text dimColor>
+                {' '}{remaining !== null ? `${formatDuration(remaining)} left` : 'never'}
+            </Text>
+        </Box>
+    );
+}
+
+function formatDuration(secs: number): string {
+    if (secs < 60) return `${secs}s`;
+    if (secs < 3600) return `${Math.floor(secs / 60)}m`;
+    return `${Math.floor(secs / 3600)}h${Math.floor((secs % 3600) / 60)}m`;
+}
+
+// ─── State file reader helpers ──────────────────────────────────────────────
+
+const PROJECT_ROOT = path.join(TINYCLAW_HOME, '..');
+const STATE_DIR = path.join(PROJECT_ROOT, 'state');
+const HEARTBEAT_STATE_DIR = path.join(TINYCLAW_HOME, 'heartbeat-state');
+
+function loadTradingState(): TradingState {
+    const state: TradingState = { regime: null, strategies: [], performance: null, dbConnected: null };
+
+    try {
+        const raw = fs.readFileSync(path.join(STATE_DIR, 'market-regime.json'), 'utf8');
+        const data = JSON.parse(raw);
+        state.regime = {
+            regime: data.regime || 'NEUTRAL',
+            btcPrice: data.btc_price || 0,
+            btc24h: data.btc_24h_change || 0,
+            ethPrice: data.eth_price || 0,
+            eth24h: data.eth_24h_change || 0,
+            confidence: data.confidence || 0,
+            assessedAt: data.assessed_at || '',
+        };
+    } catch { /* no regime file */ }
+
+    try {
+        const raw = fs.readFileSync(path.join(STATE_DIR, 'active-strategies.json'), 'utf8');
+        const data = JSON.parse(raw);
+        state.strategies = (data.strategies || []).map((s: any) => ({
+            id: s.strategy_id,
+            name: s.name,
+            asset: s.asset,
+            direction: s.direction,
+            status: s.status,
+        }));
+    } catch { /* no strategies file */ }
+
+    try {
+        const raw = fs.readFileSync(path.join(STATE_DIR, 'performance-log.json'), 'utf8');
+        const data = JSON.parse(raw);
+        state.performance = {
+            totalTrades: data.total_trades || 0,
+            openPositions: data.open_positions || 0,
+            winRate: data.win_rate ?? null,
+            pnl: data.total_pnl_pct ?? null,
+            reviewedAt: data.reviewed_at || '',
+        };
+    } catch { /* no performance file */ }
+
+    return state;
+}
+
+function loadHeartbeatState(agentId: string): number | undefined {
+    try {
+        const raw = fs.readFileSync(path.join(HEARTBEAT_STATE_DIR, `${agentId}.last`), 'utf8');
+        return parseInt(raw.trim(), 10) || undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+function checkDbConnection(): boolean {
+    try {
+        // Use execSync with fixed args only (no user input)
+        execSync('pg_isready -h 192.168.68.120 -p 5433 -U trading_app -d trading -t 2', {
+            stdio: 'ignore',
+            timeout: 3000,
+        });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 // ─── Main App ───────────────────────────────────────────────────────────────
 
 function App({ filterTeamId }: { filterTeamId: string | null }) {
@@ -261,6 +476,7 @@ function App({ filterTeamId }: { filterTeamId: string | null }) {
     const [processorAlive, setProcessorAlive] = useState(false);
     const [startTime] = useState(Date.now());
     const [, setTick] = useState(0);
+    const [tradingState, setTradingState] = useState<TradingState>(() => loadTradingState());
 
     // Force re-render every second for animated dots and uptime
     useEffect(() => {
@@ -302,11 +518,44 @@ function App({ filterTeamId }: { filterTeamId: string | null }) {
                     model: agent.model || 'sonnet',
                     status: 'idle',
                     lastActivity: '',
+                    lastHeartbeat: loadHeartbeatState(id),
+                    heartbeatInterval: (agent as any).heartbeat_interval || undefined,
                 };
             }
         }
         setAgentStates(states);
     }, [settings, filterTeamId]);
+
+    // Poll trading state files + heartbeat state every 10s
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setTradingState(loadTradingState());
+            // Update heartbeat timestamps on existing agent states
+            setAgentStates(prev => {
+                const updated = { ...prev };
+                let changed = false;
+                for (const id of Object.keys(updated)) {
+                    const hb = loadHeartbeatState(id);
+                    if (hb !== updated[id].lastHeartbeat) {
+                        updated[id] = { ...updated[id], lastHeartbeat: hb };
+                        changed = true;
+                    }
+                }
+                return changed ? updated : prev;
+            });
+        }, 10_000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // Check DB connection every 30s
+    useEffect(() => {
+        // Initial check
+        setTradingState(prev => ({ ...prev, dbConnected: checkDbConnection() }));
+        const interval = setInterval(() => {
+            setTradingState(prev => ({ ...prev, dbConnected: checkDbConnection() }));
+        }, 30_000);
+        return () => clearInterval(interval);
+    }, []);
 
     // Add a log entry helper
     const addLog = useCallback((icon: string, text: string, color: string) => {
@@ -554,6 +803,9 @@ function App({ filterTeamId }: { filterTeamId: string | null }) {
                     )}
                 </>
             )}
+
+            {/* Trading status panel */}
+            <TradingPanel trading={tradingState} />
 
             {/* Activity log */}
             <ActivityLog entries={logEntries} />

@@ -1,12 +1,15 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { Settings, AgentConfig, TeamConfig, CLAUDE_MODEL_IDS, CODEX_MODEL_IDS } from './types';
 
-export const SCRIPT_DIR = path.resolve(__dirname, '../..');
+// Bun: use import.meta.dir instead of __dirname
+// src/lib/ → up 2 = project root
+export const SCRIPT_DIR = path.resolve(import.meta.dir, '../..');
 const _localTinyclaw = path.join(SCRIPT_DIR, '.tinyclaw');
 export const TINYCLAW_HOME = fs.existsSync(path.join(_localTinyclaw, 'settings.json'))
     ? _localTinyclaw
-    : path.join(require('os').homedir(), '.tinyclaw');
+    : path.join(os.homedir(), '.tinyclaw');
 export const QUEUE_INCOMING = path.join(TINYCLAW_HOME, 'queue/incoming');
 export const QUEUE_OUTGOING = path.join(TINYCLAW_HOME, 'queue/outgoing');
 export const QUEUE_PROCESSING = path.join(TINYCLAW_HOME, 'queue/processing');
@@ -52,7 +55,7 @@ export function getDefaultAgentFromModels(settings: Settings): AgentConfig {
     }
 
     // Get workspace path from settings or use default
-    const workspacePath = settings?.workspace?.path || path.join(require('os').homedir(), 'tinyclaw-workspace');
+    const workspacePath = settings?.workspace?.path || path.join(os.homedir(), 'tinyclaw-workspace');
     const defaultAgentDir = path.join(workspacePath, 'default');
 
     return {
