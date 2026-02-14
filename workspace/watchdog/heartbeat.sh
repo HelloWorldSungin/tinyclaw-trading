@@ -45,7 +45,8 @@ fi
 STATE_DIR="$(dirname "$0")/../../state"
 for f in performance-log.json; do
     if [ -f "$STATE_DIR/$f" ]; then
-        AGE=$(( ($(date +%s) - $(stat -f %m "$STATE_DIR/$f" 2>/dev/null || stat -c %Y "$STATE_DIR/$f" 2>/dev/null)) / 3600 ))
+        MTIME=$(stat -f %m "$STATE_DIR/$f" 2>/dev/null) || MTIME=$(stat -c %Y "$STATE_DIR/$f" 2>/dev/null) || MTIME=0
+        AGE=$(( ($(date +%s) - MTIME) / 3600 ))
         if [ "$AGE" -gt 4 ]; then
             RESULTS="$RESULTS\n⚠️ $f: ${AGE}h old (stale)"
         else
