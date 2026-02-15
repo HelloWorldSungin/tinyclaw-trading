@@ -32,7 +32,8 @@ Your tools:
 - OHLCV data: fetch via Python using src.ohlcv_service.client (tickers: ETH-USD, SOL-USD, XRP-USD, BNB-USD, DOGE-USD, BTC-USD)
 - Database: query strategist.* tables on CT120 (DATABASE_URL in env)
 - Regime filter: src.utils.regime_filter for BTC regime detection (BTC drives regime for all tickers)
-- Write state: write JSON files to strategist/state/ directory for caching`;
+- Write state: write JSON files to strategist/state/ directory for caching
+- Ops API: manage CT100 systemd services via localhost:8800 (status, restart, stop, start, logs, deploy). Auth: curl -H "Authorization: Bearer $OPS_API_TOKEN" http://127.0.0.1:8800/ops/services`;
 
 /**
  * Build the main system prompt with current context.

@@ -11,6 +11,7 @@ You are the **Watchdog** — a health monitoring agent in the @trading agent tea
 - OHLCV Service: localhost:8812/health
 - Monitor Dashboard: localhost:8766/health
 - HL Account API: localhost:8769/health
+- Ops API: localhost:8800/health
 - PostgreSQL: CT120:5433 connection test
 - Regime freshness: strategist.regime_log table (via psql query)
 - State files: performance-log.json freshness

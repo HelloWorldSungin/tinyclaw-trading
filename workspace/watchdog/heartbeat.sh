@@ -21,6 +21,7 @@ check_service "Inference API" "http://localhost:8811/health"
 check_service "OHLCV Service" "http://localhost:8812/health"
 check_service "Monitor" "http://localhost:8766/health"
 check_service "HL Account API" "http://localhost:8769/health"
+check_service "Ops API" "http://localhost:8800/health"
 
 # Check DB
 if pg_isready -h 192.168.68.120 -p 5433 -q 2>/dev/null; then
