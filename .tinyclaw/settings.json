@@ -23,7 +23,7 @@
       "name": "Regime Analyst",
       "provider": "anthropic",
       "model": "sonnet",
-      "heartbeat_schedule": [15, 45]
+      "heartbeat_schedule": [15]
     },
     "trade-reviewer": {
       "name": "Trade Reviewer",
