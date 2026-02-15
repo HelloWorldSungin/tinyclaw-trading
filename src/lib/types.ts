@@ -8,6 +8,7 @@ export interface AgentConfig {
     remote_user?: string;               // SSH user for remote invocation
     remote_project_root?: string;       // project root on remote host
     heartbeat_interval?: number;        // per-agent interval in seconds (overrides global)
+    heartbeat_schedule?: number[];      // clock-aligned minutes-of-hour to fire (e.g. [15, 45])
     heartbeat_mode?: 'claude' | 'script'; // 'script' = no Claude spawn, run heartbeat.sh instead
 }
 

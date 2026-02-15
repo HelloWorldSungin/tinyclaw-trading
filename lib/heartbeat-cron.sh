@@ -2,7 +2,8 @@
 # Heartbeat — Per-agent interval heartbeats with script mode support
 #
 # Features:
-# - Per-agent heartbeat_interval (from settings.json)
+# - Per-agent heartbeat_interval (from settings.json) — elapsed-time based
+# - Per-agent heartbeat_schedule (from settings.json) — clock-aligned minutes-of-hour (e.g. [15, 45])
 # - heartbeat_mode: "script" runs agent's heartbeat.sh directly (no Claude spawn)
 # - heartbeat_mode: "claude" (default) queues message for Claude processing
 # - Reads heartbeat.md from workspace/{agent_id}/heartbeat.md
@@ -85,10 +86,16 @@ GLOBAL_INTERVAL=$(jq -r '.monitoring.heartbeat_interval // 3600' "$SETTINGS_FILE
 log "Global heartbeat interval: ${GLOBAL_INTERVAL}s"
 
 # List agents with heartbeat configuration
-jq -r '(.agents // {}) | to_entries[] | select(.value.heartbeat_interval != null) | .key' "$SETTINGS_FILE" | while read -r AGENT_ID; do
-    INTERVAL=$(jq -r ".agents.\"${AGENT_ID}\".heartbeat_interval // ${GLOBAL_INTERVAL}" "$SETTINGS_FILE")
+jq -r '(.agents // {}) | to_entries[] | select(.value.heartbeat_interval != null or .value.heartbeat_schedule != null) | .key' "$SETTINGS_FILE" | while read -r AGENT_ID; do
+    SCHEDULE=$(jq -r ".agents.\"${AGENT_ID}\".heartbeat_schedule // empty" "$SETTINGS_FILE" 2>/dev/null)
     MODE=$(jq -r ".agents.\"${AGENT_ID}\".heartbeat_mode // \"claude\"" "$SETTINGS_FILE")
-    log "  Agent @${AGENT_ID}: interval=${INTERVAL}s, mode=${MODE}"
+    if [ -n "$SCHEDULE" ]; then
+        MINS=$(jq -r ".agents.\"${AGENT_ID}\".heartbeat_schedule | map(tostring) | join(\",\")" "$SETTINGS_FILE")
+        log "  Agent @${AGENT_ID}: schedule=:${MINS}, mode=${MODE}"
+    else
+        INTERVAL=$(jq -r ".agents.\"${AGENT_ID}\".heartbeat_interval // ${GLOBAL_INTERVAL}" "$SETTINGS_FILE")
+        log "  Agent @${AGENT_ID}: interval=${INTERVAL}s, mode=${MODE}"
+    fi
 done
 
 while true; do
@@ -96,27 +103,42 @@ while true; do
 
     NOW=$(date +%s)
 
-    # Get all agent IDs that have heartbeat_interval set
-    AGENT_IDS=$(jq -r '(.agents // {}) | to_entries[] | select(.value.heartbeat_interval != null) | .key' "$SETTINGS_FILE" 2>/dev/null)
+    CURRENT_MINUTE=$(date +%-M)
+
+    # Get all agent IDs that have heartbeat_interval or heartbeat_schedule set
+    AGENT_IDS=$(jq -r '(.agents // {}) | to_entries[] | select(.value.heartbeat_interval != null or .value.heartbeat_schedule != null) | .key' "$SETTINGS_FILE" 2>/dev/null)
 
     if [ -z "$AGENT_IDS" ]; then
         continue
     fi
 
     for AGENT_ID in $AGENT_IDS; do
-        # Read per-agent interval
-        INTERVAL=$(jq -r ".agents.\"${AGENT_ID}\".heartbeat_interval // ${GLOBAL_INTERVAL}" "$SETTINGS_FILE")
         MODE=$(jq -r ".agents.\"${AGENT_ID}\".heartbeat_mode // \"claude\"" "$SETTINGS_FILE")
+        SCHEDULE=$(jq -r ".agents.\"${AGENT_ID}\".heartbeat_schedule // empty" "$SETTINGS_FILE" 2>/dev/null)
 
-        # Check if heartbeat is due
-        LAST=$(get_last_heartbeat "$AGENT_ID")
-        ELAPSED=$((NOW - LAST))
-
-        if [ "$ELAPSED" -lt "$INTERVAL" ]; then
-            continue
+        if [ -n "$SCHEDULE" ]; then
+            # Clock-aligned schedule: fire when current minute matches and hasn't fired this minute
+            MATCHES=$(jq -r ".agents.\"${AGENT_ID}\".heartbeat_schedule | map(select(. == ${CURRENT_MINUTE})) | length" "$SETTINGS_FILE" 2>/dev/null)
+            if [ "$MATCHES" = "0" ]; then
+                continue
+            fi
+            # Check we haven't already fired this minute (avoid double-fire within 60s tick)
+            LAST=$(get_last_heartbeat "$AGENT_ID")
+            ELAPSED=$((NOW - LAST))
+            if [ "$ELAPSED" -lt 90 ]; then
+                continue
+            fi
+            log "Heartbeat due for @${AGENT_ID} (schedule hit: :${CURRENT_MINUTE}, mode: ${MODE})"
+        else
+            # Elapsed-time interval
+            INTERVAL=$(jq -r ".agents.\"${AGENT_ID}\".heartbeat_interval // ${GLOBAL_INTERVAL}" "$SETTINGS_FILE")
+            LAST=$(get_last_heartbeat "$AGENT_ID")
+            ELAPSED=$((NOW - LAST))
+            if [ "$ELAPSED" -lt "$INTERVAL" ]; then
+                continue
+            fi
+            log "Heartbeat due for @${AGENT_ID} (elapsed: ${ELAPSED}s, interval: ${INTERVAL}s, mode: ${MODE})"
         fi
-
-        log "Heartbeat due for @${AGENT_ID} (elapsed: ${ELAPSED}s, interval: ${INTERVAL}s, mode: ${MODE})"
 
         if [ "$MODE" = "script" ]; then
             # Script mode — run heartbeat.sh directly, no Claude spawn
