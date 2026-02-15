@@ -211,7 +211,11 @@ export async function buildPerformancePrompt(): Promise<string> {
 
   const stateDir = getStateDir();
   return buildPrompt(
-    "Query strategist.positions for all recent trades. Calculate win rate, total P&L, and identify best/worst trades. " +
+    "Query ALL position tables for recent trades: " +
+      "paper_trading.arksignal_v1_30m_positions (paper, 30m), " +
+      "paper_trading.arksignal_v1_1h_positions (paper, 1h), " +
+      "live_trading.positions (live trades). " +
+      "Calculate win rate, total P&L, and identify best/worst trades. Break down by ticker and timeframe. " +
       `Write summary to ${stateDir}/performance-log.json. ` +
       "Give a concise performance report with key insights."
   );
