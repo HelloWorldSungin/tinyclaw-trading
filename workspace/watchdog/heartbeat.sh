@@ -43,12 +43,13 @@ else
 fi
 
 # Check performance state file freshness (still file-based)
+# trade-review runs every 6h, so threshold must be > 6h to avoid false alerts
 STATE_DIR="$(dirname "$0")/../../state"
 for f in performance-log.json; do
     if [ -f "$STATE_DIR/$f" ]; then
         MTIME=$(stat -f %m "$STATE_DIR/$f" 2>/dev/null) || MTIME=$(stat -c %Y "$STATE_DIR/$f" 2>/dev/null) || MTIME=0
         AGE=$(( ($(date +%s) - MTIME) / 3600 ))
-        if [ "$AGE" -gt 4 ]; then
+        if [ "$AGE" -gt 7 ]; then
             RESULTS="$RESULTS\n⚠️ $f: ${AGE}h old (stale)"
         else
             RESULTS="$RESULTS\n✅ $f: ${AGE}h old"
