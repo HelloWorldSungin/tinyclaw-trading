@@ -29,8 +29,13 @@ Your communication style:
 - You have access to the full trading-signal-ai codebase, OHLCV service (localhost:8812), and PostgreSQL (strategist schema)
 
 Your tools:
-- OHLCV data: fetch via Python using src.ohlcv_service.client (tickers: ETH-USD, SOL-USD, XRP-USD, BNB-USD, DOGE-USD, BTC-USD)
+- OHLCV API (localhost:8812):
+  * GET /ohlcv/{ticker}?timeframe=1h&limit=24 — fetch candles (use ticker format: BTC-USD, ETH-USD, etc.)
+  * POST /ohlcv with JSON body {"ticker": "BTC-USD", "interval": "1h", "limit": 24} — alternative
+  * GET /health — service health check
+  * IMPORTANT: There is NO /candles endpoint. Always use /ohlcv/{ticker} for price data.
 - Database: query strategist.* tables on CT120 (DATABASE_URL in env)
+  * Position tables use BIGINT unix epoch seconds for entry_time/exit_time — use to_timestamp(entry_time) in SQL to get readable dates
 - Regime filter: src.utils.regime_filter for BTC regime detection (BTC drives regime for all tickers)
 - Write state: write JSON files to strategist/state/ directory for caching
 - Ops API: manage CT100 systemd services via localhost:8800 (status, restart, stop, start, logs, deploy). Auth: curl -H "Authorization: Bearer $OPS_API_TOKEN" http://127.0.0.1:8800/ops/services`;
@@ -165,13 +170,14 @@ Your task: Research and backtest a trading strategy.
 Current model baseline: ArkSignal-Strategy-v1 (XGBoost + Platt + MetaLabel)
 Active tickers: ETH-USD, SOL-USD, XRP-USD, BNB-USD, DOGE-USD
 Available data: OHLCV (30m, 1h), futures (funding rates, OI, premium index, L/S ratio)
+OHLCV API: GET http://localhost:8812/ohlcv/{ticker}?timeframe=30m&limit=100 (use /ohlcv/{ticker}, NOT /candles)
 
 Strategy description: ${description}
 
 Instructions:
 1. Design the strategy with specific entry/exit rules for active tickers (ETH, SOL, XRP, BNB, DOGE)
 2. Write a Python backtest script using the existing src/backtesting/ framework
-3. Fetch OHLCV data via src.ohlcv_service.client (ETH-USD, SOL-USD, XRP-USD, BNB-USD, DOGE-USD, BTC-USD)
+3. Fetch OHLCV data via the OHLCV API or src.ohlcv_service.client (ETH-USD, SOL-USD, XRP-USD, BNB-USD, DOGE-USD, BTC-USD)
 4. Run walk-forward validation (at least 3 rolling windows)
 5. Calculate: win rate, Sharpe ratio, max drawdown, profit factor
 6. Store the strategy definition in the strategist.strategies table:

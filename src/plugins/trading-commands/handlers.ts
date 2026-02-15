@@ -187,8 +187,12 @@ export async function buildRegimePrompt(): Promise<string> {
   });
 
   return buildPrompt(
-    "Fetch current prices for ALL tickers from the OHLCV service (localhost:8812): BTC-USD, ETH-USD, SOL-USD, XRP-USD, BNB-USD, DOGE-USD. " +
-      "Calculate 24h change percentages. Determine regime (RALLY if BTC >+3%, SELLOFF if <-3%, NEUTRAL otherwise). " +
+    "Fetch current prices for ALL tickers using curl to the OHLCV API: " +
+      "curl -s 'http://localhost:8812/ohlcv/BTC-USD?timeframe=1h&limit=24' (and same for ETH-USD, SOL-USD, XRP-USD, BNB-USD, DOGE-USD). " +
+      "IMPORTANT: Use /ohlcv/{ticker} endpoint, NOT /candles. " +
+      "Response JSON has .data[] array with {open, high, low, close, volume, timestamp} objects. Use the latest close as current price. " +
+      "Calculate 24h change: (latest_close - oldest_close) / oldest_close * 100. " +
+      "Determine regime (RALLY if BTC >+3%, SELLOFF if <-3%, NEUTRAL otherwise). " +
       "Assess trading bias for all active tickers (ETH, SOL, XRP, BNB, DOGE) based on BTC regime. " +
       "INSERT into strategist.regime_log with exact columns: " +
       "(assessed_at, btc_price, btc_24h_change, eth_price, eth_24h_change, regime, trading_bias, confidence, reasoning, ticker_data). " +
@@ -215,9 +219,12 @@ export async function buildPerformancePrompt(): Promise<string> {
       "paper_trading.arksignal_v1_30m_positions (paper, 30m), " +
       "paper_trading.arksignal_v1_1h_positions (paper, 1h), " +
       "live_trading.positions (live trades). " +
+      "IMPORTANT: entry_time and exit_time columns are BIGINT unix epoch seconds — use to_timestamp(entry_time) to get readable dates. " +
+      "Do NOT display raw epoch values (they look like 1970 dates if misinterpreted). " +
       "CLOSED TRADES: Calculate win rate, total P&L, and identify best/worst trades. Break down by ticker and timeframe. " +
       "OPEN POSITIONS: Query WHERE status = 'open' from all tables. " +
-      "For each open position, fetch the current price from OHLCV service (localhost:8812) and calculate unrealized P&L " +
+      "For each open position, fetch the current price via curl -s 'http://localhost:8812/ohlcv/{TICKER}?timeframe=1h&limit=1' " +
+      "(use /ohlcv/{ticker}, NOT /candles) and calculate unrealized P&L " +
       "as (current_price - entry_price) / entry_price * 100 for long, inverted for short. " +
       "Show: ticker, direction, entry price, current price, unrealized P&L %, and time held. " +
       `Write summary to ${stateDir}/performance-log.json. ` +
