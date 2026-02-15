@@ -215,6 +215,8 @@ export async function buildPerformancePrompt(): Promise<string> {
       "paper_trading.arksignal_v1_30m_positions (paper, 30m), " +
       "paper_trading.arksignal_v1_1h_positions (paper, 1h), " +
       "live_trading.positions (live trades). " +
+      "IMPORTANT: Filter to ONLY current active tickers: ETH-USD, SOL-USD, XRP-USD, BNB-USD, DOGE-USD. " +
+      "Ignore legacy tickers (CRV, SUSHI, RENDER, IMX, BONK, NEAR, ARB, S-USD, etc.). " +
       "Calculate win rate, total P&L, and identify best/worst trades. Break down by ticker and timeframe. " +
       `Write summary to ${stateDir}/performance-log.json. ` +
       "Give a concise performance report with key insights."
