@@ -211,13 +211,17 @@ export async function buildPerformancePrompt(): Promise<string> {
 
   const stateDir = getStateDir();
   return buildPrompt(
-    "Query ALL position tables for recent trades: " +
+    "Query ALL position tables: " +
       "paper_trading.arksignal_v1_30m_positions (paper, 30m), " +
       "paper_trading.arksignal_v1_1h_positions (paper, 1h), " +
       "live_trading.positions (live trades). " +
-      "Calculate win rate, total P&L, and identify best/worst trades. Break down by ticker and timeframe. " +
+      "CLOSED TRADES: Calculate win rate, total P&L, and identify best/worst trades. Break down by ticker and timeframe. " +
+      "OPEN POSITIONS: Query WHERE status = 'open' from all tables. " +
+      "For each open position, fetch the current price from OHLCV service (localhost:8812) and calculate unrealized P&L " +
+      "as (current_price - entry_price) / entry_price * 100 for long, inverted for short. " +
+      "Show: ticker, direction, entry price, current price, unrealized P&L %, and time held. " +
       `Write summary to ${stateDir}/performance-log.json. ` +
-      "Give a concise performance report with key insights."
+      "Give a concise performance report covering both closed trade results and open position status."
   );
 }
 

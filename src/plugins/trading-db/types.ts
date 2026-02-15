@@ -50,6 +50,7 @@ export interface PerformanceLogState {
   open_positions: number;
   win_rate: number | null;
   total_pnl_pct: number | null;
+  unrealized_pnl_pct: number | null;
   recent_trades: TradeRecord[];
   summary: string;
   reviewed_at: string;
