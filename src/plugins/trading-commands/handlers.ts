@@ -223,9 +223,10 @@ export async function buildPerformancePrompt(): Promise<string> {
       "Do NOT display raw epoch values (they look like 1970 dates if misinterpreted). " +
       "CLOSED TRADES: Calculate win rate, total P&L, and identify best/worst trades. Break down by ticker and timeframe. " +
       "OPEN POSITIONS: Query WHERE status = 'open' from all tables. " +
-      "For each open position, fetch the current price via curl -s 'http://localhost:8812/ohlcv/{TICKER}?timeframe=1h&limit=1' " +
-      "(use /ohlcv/{ticker}, NOT /candles) and calculate unrealized P&L " +
-      "as (current_price - entry_price) / entry_price * 100 for long, inverted for short. " +
+      "For each open position, fetch the current price via: curl -s 'http://localhost:8812/ohlcv/{TICKER}?timeframe=1h&limit=1' " +
+      "The response is a JSON object with a 'data' array: {\"data\": [{\"close\": 2060.16, \"open\": ..., \"high\": ..., \"low\": ..., \"volume\": ..., \"timestamp\": ...}]}. " +
+      "Extract the price with: curl -s '...' | jq '.data[0].close' — do NOT expect a flat array. " +
+      "Calculate unrealized P&L as (current_price - entry_price) / entry_price * 100 for long, inverted for short. " +
       "Show: ticker, direction, entry price, current price, unrealized P&L %, and time held. " +
       `Write summary to ${stateDir}/performance-log.json. ` +
       "Give a concise performance report covering both closed trade results and open position status."
